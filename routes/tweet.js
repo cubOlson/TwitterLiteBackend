@@ -15,7 +15,11 @@ const tweetNotFoundError = (tweetId) => {
 }
 
 router.get('/', asyncHandler(async(req, res, next) => {
-    const tweets = await Tweet.findAll();
+    const tweets = await Tweet.findAll({
+        include: [{ model: User, as: "user", attributes: ["username"] }],
+        order: [["createdAt", "DESC"]],
+        attributes: ["message"],
+      });
     res.json({tweets});
 }));
 
@@ -41,7 +45,8 @@ router.post('/', tweetValidator, handleValidationErrors, asyncHandler(async(req,
     const { message } = req.body;
 
     await Tweet.create({
-        message
+        message,
+        userId: req.user.id
     });
 
     res.redirect('/tweets');
@@ -60,16 +65,29 @@ router.put('/:id(\\d+)', tweetValidator, handleValidationErrors, asyncHandler(as
     }
 }));
 
-router.delete('/:id(\\d+)', asyncHandler(async(req, res, next) => {
-    try {
-        const { id } = req.body;
-        const tweet = await Tweet.findByPk(id);
-        await tweet.destroy()
-        res.redirect('/tweets');
-    } catch {
-        next(tweetNotFoundError(id));
-    }
-}));
+router.delete(
+    "/:id(\\d+)",
+    asyncHandler(async (req, res, next) => {
+      const tweet = await Tweet.findOne({
+        where: {
+          id: req.params.id,
+        },
+      });
+      if (req.user.id !== tweet.userId) {
+        const err = new Error("Unauthorized");
+        err.status = 401;
+        err.message = "You are not authorized to delete this tweet.";
+        err.title = "Unauthorized";
+        throw err;
+      }
+      if (tweet) {
+        await tweet.destroy();
+        res.json({ message: `Deleted tweet with id of ${req.params.id}.` });
+      } else {
+        next(tweetNotFoundError(req.params.id));
+      }
+    })
+  );
 
 
 module.exports = router;

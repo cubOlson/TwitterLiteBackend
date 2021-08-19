@@ -19,11 +19,22 @@ app.use('/users', userRouter);
 // Catch unhandled requests and forward to error handler.
 app.use((req, res, next) => {
   const err = new Error("The requested resource couldn't be found.");
+  err.errors = ["The requested resource couldn't be found."];
   err.status = 404;
   next(err);
 });
 
 // Custom error handlers.
+
+// Process sequelize errors
+app.use((err, req, res, next) => {
+  // check if error is a Sequelize error:
+  if (err instanceof ValidationError) {
+    err.errors = err.errors.map((e) => e.message);
+    err.title = "Sequelize Error";
+  }
+  next(err);
+});
 
 // Generic error handler.
 app.use((err, req, res, next) => {
